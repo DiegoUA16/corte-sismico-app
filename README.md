@@ -24,6 +24,14 @@ Una línea por mensaje, terminada en `\n`, a 9600 baudios:
 
 La app también alerta si un `MAG:` supera el umbral configurado en la app.
 
+## Instalar el APK
+El APK listo para instalar está en `apk/Sismografo-v1.0.apk`.
+1. Pásalo al celular (cable, Drive, WhatsApp…) y ábrelo.
+2. Si Android lo pide, permite *Instalar apps desconocidas* para esa app.
+3. Al abrir Sismógrafo, acepta los permisos de Bluetooth y notificaciones.
+
+Es una compilación *debug*: sirve para pruebas y para la entrega, no para publicar en Play Store.
+
 ## Cómo abrirla
 1. Instala **Android Studio** (trae el SDK y Java).
 2. *File > Open* → carpeta `SismografoApp`. Deja que sincronice Gradle.
