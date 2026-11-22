@@ -1,5 +1,6 @@
 package com.sismografo.app.ui
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -15,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.BluetoothDisabled
+import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -42,20 +44,17 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sismografo.app.Muestra
 import com.sismografo.app.bluetooth.EstadoConexion
-import com.sismografo.app.datos.Lectura
-import com.sismografo.app.datos.NivelSismo
+import com.sismografo.app.datos.Parametros
 import com.sismografo.app.datos.f1
 import com.sismografo.app.ui.tema.Paleta
-import com.sismografo.app.ui.tema.Tabular
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.sin
 
 // ------------------------------------------------------------------ contenedores
 
@@ -120,6 +119,15 @@ fun EncabezadoPantalla(
     }
 }
 
+/** Icono dentro de un cuadrado redondeado de color suave (filas de eventos, pines…). */
+@Composable
+fun IconoCuadrado(icono: ImageVector, color: Color, tam: Dp = 44.dp) {
+    Box(
+        Modifier.size(tam).clip(RoundedCornerShape(tam * 0.3f)).background(color.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icono, null, tint = color, modifier = Modifier.size(tam * 0.52f)) }
+}
+
 // ------------------------------------------------------------------ chips y píldoras
 
 @Composable
@@ -131,14 +139,14 @@ fun Pildora(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier.clip(CircleShape).background(fondo).padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier.clip(CircleShape).background(fondo).padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (punto) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+            Box(Modifier.size(7.dp).clip(CircleShape).background(color))
             Spacer(Modifier.width(6.dp))
         }
-        Text(texto, style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1)
+        Text(texto, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
     }
 }
 
@@ -154,12 +162,13 @@ fun PuntoPulsante(color: Color, tam: Dp = 8.dp) {
 }
 
 @Composable
-fun ChipConexion(estado: EstadoConexion, onClick: () -> Unit) {
-    val (texto, color) = when (estado) {
-        is EstadoConexion.Conectado -> "${estado.nombre} · Conectado" to Paleta.Exito
-        is EstadoConexion.Conectando -> "Conectando…" to Color(0xFFD97706)
-        is EstadoConexion.Error -> "Reconectando" to Color(0xFFD97706)
-        EstadoConexion.Desconectado -> "Sin conexión" to Paleta.TintaSuave
+fun ChipConexion(estado: EstadoConexion, demo: Boolean, onClick: () -> Unit) {
+    val (texto, color) = when {
+        demo && estado is EstadoConexion.Conectado -> "Demostración" to Color(0xFF7C3AED)
+        estado is EstadoConexion.Conectado -> "${estado.nombre} · Conectado" to Paleta.Exito
+        estado is EstadoConexion.Conectando -> "Conectando…" to Paleta.Ambar
+        estado is EstadoConexion.Error -> "Reconectando" to Paleta.Ambar
+        else -> "Sin conexión" to Paleta.TintaSuave
     }
     Row(
         Modifier.clip(CircleShape).background(Paleta.Recesado).clickable(onClick = onClick)
@@ -172,7 +181,11 @@ fun ChipConexion(estado: EstadoConexion, onClick: () -> Unit) {
         Text(texto, style = MaterialTheme.typography.labelLarge, color = Paleta.Tinta, maxLines = 1)
         Spacer(Modifier.width(6.dp))
         Icon(
-            if (estado is EstadoConexion.Desconectado) Icons.Rounded.BluetoothDisabled else Icons.Rounded.Bluetooth,
+            when {
+                demo -> Icons.Rounded.Build
+                estado is EstadoConexion.Desconectado -> Icons.Rounded.BluetoothDisabled
+                else -> Icons.Rounded.Bluetooth
+            },
             null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp),
         )
     }
@@ -196,223 +209,115 @@ fun ChipFiltro(texto: String, seleccionado: Boolean, puntoColor: Color? = null, 
     }
 }
 
-/** Grupo de opciones tipo "1 min / 10 min / 1 h". */
-@Composable
-fun Segmentado(opciones: List<String>, seleccion: Int, onSeleccion: (Int) -> Unit) {
-    Row(Modifier.clip(CircleShape).background(Paleta.Recesado).padding(3.dp)) {
-        opciones.forEachIndexed { i, op ->
-            val activo = i == seleccion
-            Box(
-                Modifier.clip(CircleShape)
-                    .background(if (activo) MaterialTheme.colorScheme.primary else Color.Transparent)
-                    .clickable { onSeleccion(i) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    op, style = MaterialTheme.typography.labelMedium,
-                    color = if (activo) Color.White else Paleta.TintaSuave,
-                )
-            }
-        }
-    }
+// ------------------------------------------------------------------ aceleración
+
+/** Color según qué tan cerca está la aceleración del umbral de riesgo. */
+fun colorAceleracion(ms2: Double?): Color = when {
+    ms2 == null -> Paleta.TintaSuave
+    ms2 >= Parametros.UMBRAL_MS2 -> Paleta.Alerta
+    ms2 >= Parametros.UMBRAL_MS2 * 0.66 -> Paleta.Ambar
+    else -> Paleta.Exito
 }
 
-// ------------------------------------------------------------------ magnitud
-
+/** Barra horizontal 0–8 m/s² con degradado y marca discontinua en el umbral. */
 @Composable
-fun InsigniaMagnitud(magnitud: Double, tam: Dp = 56.dp) {
-    val nivel = NivelSismo.de(magnitud)
-    Column(
-        Modifier.size(tam).clip(RoundedCornerShape(16.dp)).background(nivel.color.copy(alpha = 0.13f)),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            magnitud.f1(),
-            style = MaterialTheme.typography.titleLarge.merge(Tabular),
-            fontWeight = FontWeight.ExtraBold, color = nivel.color,
-        )
-        Text("Mw", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = nivel.color.copy(alpha = 0.8f))
-    }
-}
-
-/**
- * Medidor semicircular 0–9 segmentado por la escala de Richter.
- * El valor actual se marca con un punto sobre el arco (no con una aguja,
- * para no tapar el número), y el umbral con una marca discontinua.
- */
-@Composable
-fun MedidorMagnitud(magnitud: Double?, umbral: Float, modifier: Modifier = Modifier) {
-    val animado by animateFloatAsState((magnitud ?: 0.0).toFloat(), tween(600), label = "mag")
+fun BarraAceleracion(ms2: Double?, modifier: Modifier = Modifier) {
+    val escala = Parametros.ESCALA_MS2.toFloat()
+    val valor by animateFloatAsState(((ms2 ?: 0.0).toFloat() / escala).coerceIn(0f, 1f), tween(180), label = "acc")
+    val umbral = (Parametros.UMBRAL_MS2 / Parametros.ESCALA_MS2).toFloat()
     val medidor = rememberTextMeasurer()
-    val nivel = magnitud?.let { NivelSismo.de(it) }
-    val estiloEtiqueta = TextStyle(fontSize = 12.sp, color = Paleta.TintaSuave)
-    val estiloUmbral = TextStyle(fontSize = 12.sp, color = Paleta.Alerta, fontWeight = FontWeight.Bold)
+    val estilo = TextStyle(fontSize = 11.sp, color = Paleta.Alerta, fontWeight = FontWeight.SemiBold)
+    val estiloEje = TextStyle(fontSize = 11.sp, color = Paleta.TintaSuave)
 
-    Box(modifier.fillMaxWidth().aspectRatio(1.55f)) {
-        Canvas(Modifier.fillMaxSize()) {
-            val grosor = 18.dp.toPx()
-            val arriba = 26.dp.toPx()
-            val r = minOf(size.width / 2f - grosor, size.height - arriba - 14.dp.toPx())
-            val c = Offset(size.width / 2f, arriba + r)
-            val caja = Size(2 * r, 2 * r)
-            val esquina = Offset(c.x - r, c.y - r)
-            fun angulo(m: Float) = 180f + (m.coerceIn(0f, 9f) / 9f) * 180f
-            fun punto(m: Float, radio: Float): Offset {
-                val a = Math.toRadians(angulo(m).toDouble())
-                return Offset(c.x + radio * cos(a).toFloat(), c.y + radio * sin(a).toFloat())
-            }
-
-            // pista de fondo
-            drawArc(Paleta.Recesado, 180f, 180f, false, esquina, caja, style = Stroke(grosor, cap = StrokeCap.Round))
-            // segmentos por nivel
-            val niveles = NivelSismo.entries
-            niveles.forEachIndexed { i, n ->
-                val desde = n.desde.toFloat()
-                val hasta = if (i + 1 < niveles.size) niveles[i + 1].desde.toFloat() else 9f
-                val activo = nivel != null && animado >= desde
-                drawArc(
-                    color = n.color.copy(alpha = if (activo) 1f else 0.28f),
-                    startAngle = angulo(desde) + 0.8f,
-                    sweepAngle = angulo(hasta) - angulo(desde) - 1.6f,
-                    useCenter = false, topLeft = esquina, size = caja,
-                    style = Stroke(grosor, cap = StrokeCap.Butt),
-                )
-            }
-            // marca del umbral
-            drawLine(
-                Paleta.Alerta, punto(umbral, r - grosor), punto(umbral, r + grosor),
-                strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f)),
-            )
-            val txtU = medidor.measure(umbral.f1(), estiloUmbral)
-            val pU = punto(umbral, r + grosor + 10.dp.toPx())
-            drawText(txtU, topLeft = Offset(pU.x - txtU.size.width / 2f, pU.y - txtU.size.height / 2f))
-
-            // etiquetas 0 y 9
-            val t0 = medidor.measure("0", estiloEtiqueta)
-            val t9 = medidor.measure("9", estiloEtiqueta)
-            drawText(t0, topLeft = Offset(c.x - r - t0.size.width / 2f, c.y + grosor / 2f + 4.dp.toPx()))
-            drawText(t9, topLeft = Offset(c.x + r - t9.size.width / 2f, c.y + grosor / 2f + 4.dp.toPx()))
-
-            // valor actual
-            if (nivel != null) {
-                val p = punto(animado, r)
-                drawCircle(Color.White, grosor * 0.75f, p)
-                drawCircle(nivel.color, grosor * 0.75f, p, style = Stroke(4.dp.toPx()))
-            }
+    Canvas(modifier.fillMaxWidth().height(54.dp)) {
+        val alto = 12.dp.toPx()
+        val y = 20.dp.toPx()
+        val r = androidx.compose.ui.geometry.CornerRadius(alto / 2)
+        drawRoundRect(Paleta.Recesado, Offset(0f, y), androidx.compose.ui.geometry.Size(size.width, alto), r)
+        val pinceles = Brush.horizontalGradient(
+            0f to Paleta.Exito, umbral * 0.66f to Paleta.Exito, umbral * 0.95f to Paleta.Ambar,
+            umbral to Paleta.Alerta, 1f to Paleta.Alerta,
+            startX = 0f, endX = size.width,
+        )
+        if (ms2 != null) {
+            drawRoundRect(pinceles, Offset(0f, y), androidx.compose.ui.geometry.Size(max(alto, size.width * valor), alto), r)
+            drawCircle(Color.White, alto * 0.95f, Offset(max(alto / 2, size.width * valor - alto / 2), y + alto / 2))
+            drawCircle(colorAceleracion(ms2), alto * 0.95f, Offset(max(alto / 2, size.width * valor - alto / 2), y + alto / 2), style = Stroke(3.dp.toPx()))
         }
-        Column(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                magnitud?.f1() ?: "--",
-                style = MaterialTheme.typography.displayLarge.merge(Tabular),
-                fontWeight = FontWeight.ExtraBold,
-                color = nivel?.color ?: Paleta.TintaSuave,
-            )
-            Text("Magnitud estimada", style = MaterialTheme.typography.bodyMedium, color = Paleta.TintaSuave)
-        }
+        val xu = size.width * umbral
+        drawLine(
+            Paleta.Alerta, Offset(xu, y - 6.dp.toPx()), Offset(xu, y + alto + 6.dp.toPx()), 2.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)),
+        )
+        val t = medidor.measure("Umbral ${Parametros.UMBRAL_MS2.f1()}", estilo)
+        drawText(t, topLeft = Offset((xu - t.size.width / 2f).coerceIn(0f, size.width - t.size.width), 0f))
+        val t0 = medidor.measure("0", estiloEje)
+        val t8 = medidor.measure("${Parametros.ESCALA_MS2.toInt()} m/s²", estiloEje)
+        drawText(t0, topLeft = Offset(0f, y + alto + 6.dp.toPx()))
+        drawText(t8, topLeft = Offset(size.width - t8.size.width, y + alto + 6.dp.toPx()))
     }
 }
 
-/** Barra con los 7 niveles de Richter y el actual resaltado. */
+/** Gráfica de los últimos 30 s de aceleración con la línea del umbral. */
 @Composable
-fun BarraRichter(actual: NivelSismo?) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        NivelSismo.entries.forEach { n ->
-            val activo = n == actual
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier.fillMaxWidth().height(if (activo) 12.dp else 8.dp).clip(CircleShape)
-                        .background(n.color.copy(alpha = if (activo) 1f else 0.35f)),
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    n.corto, fontSize = 11.sp, maxLines = 1,
-                    fontWeight = if (activo) FontWeight.Bold else FontWeight.Normal,
-                    color = if (activo) n.color else Paleta.TintaSuave,
-                )
-            }
-        }
-    }
-}
-
-// ------------------------------------------------------------------ gráfica
-
-/**
- * Gráfica de magnitud en el tiempo. Agrupa las lecturas en ~90 columnas
- * (tomando el máximo de cada una) para que la línea se vea suave en cualquier ventana.
- */
-@Composable
-fun Sismograma(lecturas: List<Lectura>, umbral: Float, ventanaSeg: Int, modifier: Modifier = Modifier) {
-    val ahora by rememberAhora()
+fun Acelerograma(muestras: List<Muestra>, modifier: Modifier = Modifier, ventanaMs: Long = 30_000L) {
+    val ahora by rememberAhora(250)
     val linea = MaterialTheme.colorScheme.primary
     val medidor = rememberTextMeasurer()
-    val desde = ahora - ventanaSeg * 1000L
-    val visibles = lecturas.filter { it.hora >= desde }
+    val estiloEje = TextStyle(fontSize = 10.sp, color = Paleta.TintaSuave)
+    val desde = ahora - ventanaMs
+    val visibles = muestras.filter { it.hora >= desde }
 
-    Box(
-        modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(16.dp)).background(Paleta.Recesado),
-    ) {
-        if (visibles.size < 2) {
-            Text(
-                "Esperando lecturas del sismógrafo…",
-                Modifier.align(Alignment.Center), style = MaterialTheme.typography.bodyMedium,
-                color = Paleta.TintaSuave,
-            )
-        }
-        Canvas(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 14.dp)) {
-            val maxY = max(6f, (visibles.maxOfOrNull { it.magnitud }?.toFloat() ?: 0f) + 1f)
-            fun y(m: Float) = size.height * (1f - m / maxY)
+    Box(modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(16.dp)).background(Paleta.Recesado)) {
+        Canvas(Modifier.fillMaxSize().padding(start = 10.dp, end = 10.dp, top = 12.dp, bottom = 18.dp)) {
+            val maxY = max(Parametros.UMBRAL_MS2.toFloat() * 1.6f, (visibles.maxOfOrNull { it.ms2 }?.toFloat() ?: 0f) * 1.1f)
+            fun y(v: Float) = size.height * (1f - v / maxY)
+            fun x(h: Long) = size.width * ((h - desde).toFloat() / ventanaMs)
 
-            // rejilla
-            for (g in 2 until maxY.toInt() step 2) {
-                drawLine(Paleta.Borde, Offset(0f, y(g.toFloat())), Offset(size.width, y(g.toFloat())), 1.dp.toPx())
+            val yu = y(Parametros.UMBRAL_MS2.toFloat())
+            drawLine(Paleta.Alerta, Offset(0f, yu), Offset(size.width, yu), 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)))
+
+            listOf("-30 s" to 0f, "-15 s" to 0.5f, "Ahora" to 1f).forEach { (txt, f) ->
+                val m = medidor.measure(txt, estiloEje)
+                drawText(m, topLeft = Offset((size.width * f - m.size.width * f), size.height + 3.dp.toPx()))
             }
-            // umbral
-            drawLine(
-                Paleta.Alerta, Offset(0f, y(umbral)), Offset(size.width, y(umbral)), 2.dp.toPx(),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 9f)),
-            )
-            val etiqueta = medidor.measure(
-                "Umbral ${umbral.f1()}",
-                TextStyle(fontSize = 11.sp, color = Paleta.Alerta, fontWeight = FontWeight.SemiBold),
-            )
-            drawText(etiqueta, topLeft = Offset(size.width - etiqueta.size.width, y(umbral) - etiqueta.size.height - 2.dp.toPx()))
 
             if (visibles.size < 2) return@Canvas
-            val columnas = 90
-            val ancho = ventanaSeg * 1000f / columnas
-            val puntos = (0 until columnas).mapNotNull { i ->
-                val ini = desde + (i * ancho).toLong()
-                val fin = ini + ancho.toLong()
-                visibles.filter { it.hora in ini until fin }.maxOfOrNull { it.magnitud }?.let { m ->
-                    Offset(size.width * (i + 0.5f) / columnas, y(m.toFloat()))
-                }
-            }
-            if (puntos.size < 2) return@Canvas
-
             val trazo = Path().apply {
-                moveTo(puntos.first().x, puntos.first().y)
-                for (i in 1 until puntos.size) {
-                    val a = puntos[i - 1]
-                    val b = puntos[i]
-                    val medio = Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
-                    quadraticBezierTo(a.x, a.y, medio.x, medio.y)
-                }
-                lineTo(puntos.last().x, puntos.last().y)
+                moveTo(x(visibles.first().hora), y(visibles.first().ms2.toFloat()))
+                visibles.drop(1).forEach { lineTo(x(it.hora), y(it.ms2.toFloat())) }
             }
             val relleno = Path().apply {
                 addPath(trazo)
-                lineTo(puntos.last().x, size.height)
-                lineTo(puntos.first().x, size.height)
+                lineTo(x(visibles.last().hora), size.height)
+                lineTo(x(visibles.first().hora), size.height)
                 close()
             }
-            drawPath(relleno, Brush.verticalGradient(listOf(linea.copy(alpha = 0.22f), Color.Transparent)))
-            drawPath(trazo, linea, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
-            drawCircle(linea, 4.dp.toPx(), puntos.last())
+            drawPath(relleno, Brush.verticalGradient(listOf(linea.copy(alpha = 0.20f), Color.Transparent)))
+            drawPath(trazo, linea, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            val ultimo = visibles.last()
+            drawCircle(colorAceleracion(ultimo.ms2), 4.dp.toPx(), Offset(x(ultimo.hora), y(ultimo.ms2.toFloat())))
+        }
+    }
+}
+
+/** Cuatro círculos que se llenan con cada pico sostenido. */
+@Composable
+fun IndicadorPicos(picos: Int, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(Parametros.PICOS_NECESARIOS) { i ->
+            val lleno = i < picos
+            val color by animateColorAsState(if (lleno) Paleta.Ambar else Color.Transparent, label = "pico")
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(color)
+                    .border(2.dp, if (lleno) Paleta.Ambar else Paleta.Borde, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "${i + 1}", style = MaterialTheme.typography.titleMedium,
+                    color = if (lleno) Color.White else Paleta.TintaSuave,
+                )
+            }
         }
     }
 }
@@ -448,14 +353,27 @@ fun FilaInterruptor(
     }
 }
 
+@Composable
+fun FilaDato(etiqueta: String, valor: String, icono: ImageVector? = null) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (icono != null) {
+            Icon(icono, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+        }
+        Text(etiqueta, style = MaterialTheme.typography.bodyMedium, color = Paleta.TintaSuave, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+        Text(valor, style = MaterialTheme.typography.titleSmall, color = Paleta.Tinta)
+    }
+}
+
 // ------------------------------------------------------------------ tiempo
 
-/** Hora actual que se refresca cada segundo (para contadores en vivo). */
+/** Hora actual que se refresca periódicamente (para contadores en vivo). */
 @Composable
-fun rememberAhora(): State<Long> = produceState(System.currentTimeMillis()) {
+fun rememberAhora(cadaMs: Long = 1000): State<Long> = produceState(System.currentTimeMillis(), cadaMs) {
     while (true) {
         value = System.currentTimeMillis()
-        delay(1000)
+        delay(cadaMs)
     }
 }
 
@@ -479,20 +397,20 @@ fun tituloDia(ms: Long): String {
     }
 }
 
-/** Tiempo transcurrido corto: "Ahora", "5 min", "2 h", "3 d". */
-fun haceCorto(ms: Long, ahora: Long): String {
+/** Tiempo transcurrido: "hace un momento", "hace 5 min", "hace 2 h", "hace 3 d". */
+fun hace(ms: Long, ahora: Long): String {
     val s = (ahora - ms) / 1000
     return when {
-        s < 60 -> "Ahora"
-        s < 3600 -> "${s / 60} min"
-        s < 86_400 -> "${s / 3600} h"
-        else -> "${s / 86_400} d"
+        s < 60 -> "hace un momento"
+        s < 3600 -> "hace ${s / 60} min"
+        s < 86_400 -> "hace ${s / 3600} h"
+        else -> "hace ${s / 86_400} d"
     }
 }
 
 /** "2 h 14 min", "5 min 03 s" */
 fun duracionLarga(ms: Long): String {
-    val s = ms / 1000
+    val s = (ms / 1000).coerceAtLeast(0)
     return when {
         s >= 3600 -> "${s / 3600} h ${(s % 3600) / 60} min"
         s >= 60 -> "${s / 60} min ${"%02d".format(s % 60)} s"

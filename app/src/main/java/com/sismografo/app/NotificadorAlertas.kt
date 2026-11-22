@@ -12,22 +12,19 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.sismografo.app.datos.Evento
-import com.sismografo.app.datos.NivelSismo
-import com.sismografo.app.datos.f1
 
 /**
- * Notificación de alerta. El canal es silencioso: el sonido y la vibración los
- * maneja [AlarmaLocal] para respetar los interruptores de Ajustes.
+ * Notificación cuando el equipo avisa que ejecutó el corte. El canal es
+ * silencioso: el sonido y la vibración los maneja [AlarmaLocal] para respetar Ajustes.
  */
 class NotificadorAlertas(private val context: Context) {
 
     init {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val canal = NotificationChannel(
-                CANAL, "Alertas sísmicas", NotificationManager.IMPORTANCE_HIGH
+                CANAL, "Cortes preventivos", NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Aviso cuando el sismógrafo detecta un sismo"
+                description = "Aviso cuando el equipo cierra el gas y corta la energía"
                 enableVibration(false)
                 setSound(null, null)
             }
@@ -37,13 +34,12 @@ class NotificadorAlertas(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission") // se comprueba abajo
-    fun alertar(evento: Evento, pantallaCompleta: Boolean) {
+    fun alertar(hora: Long, manual: Boolean, pantallaCompleta: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) return
 
-        val nivel = NivelSismo.de(evento.magnitud)
         val abrirApp = PendingIntent.getActivity(
             context, 0,
             Intent(context, MainActivity::class.java)
@@ -51,15 +47,20 @@ class NotificadorAlertas(private val context: Context) {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+        val titulo = if (manual) "Corte manual ejecutado" else "¡Alerta sísmica! Corte preventivo ejecutado"
+        val texto = "Gas cerrado y energía cortada."
+        val largo = if (manual) {
+            "$texto\nRearma desde la app o con el botón del equipo cuando sea seguro."
+        } else {
+            "$texto\nAgáchate, cúbrete y sujétate. No enciendas fuego ni interruptores."
+        }
+
         val builder = NotificationCompat.Builder(context, CANAL)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("¡Alerta sísmica! Magnitud ${evento.magnitud.f1()}")
-            .setContentText("${nivel.nombre} · ${nivel.descripcion}")
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(
-                    "${nivel.nombre} · ${nivel.descripcion}\nAgáchate, cúbrete y sujétate."
-                )
-            )
+            .setContentTitle(titulo)
+            .setContentText(texto)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(largo))
+            .setWhen(hora)
             .setColor(0xFFDC2626.toInt())
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -73,7 +74,7 @@ class NotificadorAlertas(private val context: Context) {
     fun cancelar() = NotificationManagerCompat.from(context).cancel(ID_NOTIFICACION)
 
     private companion object {
-        const val CANAL = "alertas_sismo_v2"
+        const val CANAL = "cortes_preventivos"
         const val ID_NOTIFICACION = 1
     }
 }

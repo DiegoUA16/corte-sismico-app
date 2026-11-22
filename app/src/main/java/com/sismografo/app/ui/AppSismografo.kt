@@ -14,17 +14,19 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.EventNote
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.SettingsInputAntenna
-import androidx.compose.material.icons.rounded.ShowChart
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -32,8 +34,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -45,9 +49,9 @@ import com.sismografo.app.bluetooth.Emparejado
 import com.sismografo.app.ui.tema.Paleta
 
 private enum class Pestana(val etiqueta: String, val icono: ImageVector) {
-    MONITOR("Monitor", Icons.Rounded.ShowChart),
-    HISTORIAL("Historial", Icons.Rounded.History),
-    DISPOSITIVO("Dispositivo", Icons.Rounded.SettingsInputAntenna),
+    MONITOR("Monitor", Icons.Rounded.Shield),
+    EVENTOS("Eventos", Icons.Rounded.EventNote),
+    SISTEMA("Sistema", Icons.Rounded.Memory),
     AJUSTES("Ajustes", Icons.Rounded.Settings),
 }
 
@@ -67,6 +71,7 @@ fun AppSismografo(vm: SismografoViewModel) {
     val ui by vm.ui.collectAsState()
 
     var pestana by rememberSaveable { mutableStateOf(Pestana.MONITOR) }
+    var rearmeAbierto by rememberSaveable { mutableStateOf(false) }
     var permisoBt by remember { mutableStateOf(tienePermisoBluetooth(context)) }
     var refresco by remember { mutableIntStateOf(0) }
 
@@ -92,98 +97,114 @@ fun AppSismografo(vm: SismografoViewModel) {
     }
 
     Box(Modifier.fillMaxSize()) {
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            NavigationBar(containerColor = Paleta.Tarjeta, tonalElevation = 0.dp) {
-                Pestana.entries.forEach { p ->
-                    NavigationBarItem(
-                        selected = pestana == p,
-                        onClick = { pestana = p; if (p == Pestana.DISPOSITIVO) refresco++ },
-                        icon = { Icon(p.icono, null) },
-                        label = { Text(p.etiqueta) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                            unselectedIconColor = Paleta.TintaSuave,
-                            unselectedTextColor = Paleta.TintaSuave,
-                        ),
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                NavigationBar(containerColor = Paleta.Tarjeta, tonalElevation = 0.dp) {
+                    Pestana.entries.forEach { p ->
+                        NavigationBarItem(
+                            selected = pestana == p,
+                            onClick = { pestana = p; if (p == Pestana.SISTEMA) refresco++ },
+                            icon = { Icon(p.icono, null) },
+                            label = { Text(p.etiqueta) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                unselectedIconColor = Paleta.TintaSuave,
+                                unselectedTextColor = Paleta.TintaSuave,
+                            ),
+                        )
+                    }
+                }
+            },
+        ) { interno ->
+            val dir = LocalLayoutDirection.current
+            val padding = PaddingValues(
+                start = interno.calculateStartPadding(dir) + 20.dp,
+                end = interno.calculateEndPadding(dir) + 20.dp,
+                top = interno.calculateTopPadding() + 8.dp,
+                bottom = interno.calculateBottomPadding() + 24.dp,
+            )
+
+            Crossfade(pestana, label = "pestanas") { actual ->
+                when (actual) {
+                    Pestana.MONITOR -> PantallaMonitor(
+                        ui, padding,
+                        onIrASistema = { pestana = Pestana.SISTEMA; refresco++ },
+                        onIrAEventos = { pestana = Pestana.EVENTOS },
+                        onCorteManual = vm::corteManual,
+                        onAbrirRearme = { rearmeAbierto = true },
+                        onSimularGolpe = vm::simularGolpe,
+                        onSimularSismo = vm::simularSismo,
+                        onDescartarAviso = vm::descartarAviso,
+                    )
+                    Pestana.EVENTOS -> PantallaEventos(ui.eventos, padding, onBorrar = vm::borrarRegistro)
+                    Pestana.SISTEMA -> PantallaSistema(
+                        ui = ui,
+                        contentPadding = padding,
+                        permisoBt = permisoBt,
+                        btEncendido = btEncendido,
+                        emparejados = emparejados,
+                        onPedirPermiso = { pedirPermisos.launch(permisosNecesarios()) },
+                        onEncenderBt = { encenderBt.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) },
+                        onConectar = vm::conectar,
+                        onDesconectar = vm::desconectar,
+                        onIniciarDemo = { vm.iniciarDemo(); pestana = Pestana.MONITOR },
+                        onRefrescar = { refresco++ },
+                        onAbrirAjustesBt = { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
+                    )
+                    Pestana.AJUSTES -> PantallaAjustes(
+                        ui.ajustes, ui.modoDemo, padding,
+                        onCambio = vm::actualizarAjustes,
+                        onProbarAlerta = vm::probarAlerta,
+                        onIniciarDemo = { vm.iniciarDemo(); pestana = Pestana.MONITOR },
+                        onSalirDemo = vm::desconectar,
                     )
                 }
             }
-        },
-    ) { interno ->
-        val dir = LocalLayoutDirection.current
-        val padding = PaddingValues(
-            start = interno.calculateStartPadding(dir) + 20.dp,
-            end = interno.calculateEndPadding(dir) + 20.dp,
-            top = interno.calculateTopPadding() + 8.dp,
-            bottom = interno.calculateBottomPadding() + 24.dp,
-        )
+        }
 
-        Crossfade(pestana, label = "pestanas") { actual ->
-            when (actual) {
-                Pestana.MONITOR -> PantallaMonitor(
-                    ui, padding,
-                    onIrADispositivo = { pestana = Pestana.DISPOSITIVO; refresco++ },
-                    onIrAHistorial = { pestana = Pestana.HISTORIAL },
-                )
-                Pestana.HISTORIAL -> PantallaHistorial(ui.eventos, padding, onBorrar = vm::borrarHistorial)
-                Pestana.DISPOSITIVO -> PantallaDispositivo(
-                    ui = ui,
-                    contentPadding = padding,
-                    permisoBt = permisoBt,
-                    btEncendido = btEncendido,
-                    emparejados = emparejados,
-                    onPedirPermiso = { pedirPermisos.launch(permisosNecesarios()) },
-                    onEncenderBt = { encenderBt.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) },
-                    onConectar = vm::conectar,
-                    onDesconectar = vm::desconectar,
-                    onRecalibrar = vm::recalibrar,
-                    onRefrescar = { refresco++ },
-                    onAbrirAjustesBt = { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
-                )
-                Pestana.AJUSTES -> PantallaAjustes(
-                    ui.ajustes, padding,
-                    onCambio = vm::actualizarAjustes,
-                    onProbarAlerta = vm::probarAlerta,
+        // Rearme seguro (pantalla dedicada sobre la navegación)
+        AnimatedVisibility(
+            visible = rearmeAbierto,
+            enter = slideInVertically { it / 3 } + fadeIn(),
+            exit = slideOutVertically { it / 3 } + fadeOut(),
+        ) {
+            PantallaRearme(ui, onCerrar = { rearmeAbierto = false }, onRearmar = vm::rearmar)
+        }
+
+        // Alerta a pantalla completa por encima de todo
+        val alerta = ui.alertaActiva
+        AnimatedVisibility(
+            visible = alerta != null && (ui.ajustes.pantallaCompleta || ui.alertaEsPrueba),
+            enter = fadeIn() + scaleIn(initialScale = 0.96f),
+            exit = fadeOut(),
+        ) {
+            // Se conserva la última hora durante la animación de salida
+            val ultima = remember { mutableStateOf(alerta) }
+            if (alerta != null) ultima.value = alerta
+            ultima.value?.let {
+                PantallaAlerta(
+                    hora = it,
+                    manual = ui.alertaManual,
+                    esPrueba = ui.alertaEsPrueba,
+                    alarmaSonando = ui.alarmaSonando,
+                    onEstoyASalvo = vm::estoyASalvo,
+                    onSilenciar = vm::silenciar,
                 )
             }
         }
-    }
 
-    // Alerta a pantalla completa por encima de todo
-    val alerta = ui.alertaActiva
-    AnimatedVisibility(
-        visible = alerta != null && (ui.ajustes.pantallaCompleta || ui.alertaEsPrueba),
-        enter = fadeIn() + scaleIn(initialScale = 0.96f),
-        exit = fadeOut(),
-    ) {
-        // Se conserva el último evento durante la animación de salida
-        val ultimo = remember { mutableStateOf(alerta) }
-        if (alerta != null) ultimo.value = alerta
-        ultimo.value?.let {
-            PantallaAlerta(
-                evento = it,
-                esPrueba = ui.alertaEsPrueba,
-                nombreSensor = ui.dispositivo?.nombre,
-                alarmaSonando = ui.alarmaSonando,
-                onEstoyASalvo = vm::estoyASalvo,
-                onSilenciar = vm::silenciar,
+        // Si la pantalla completa está desactivada, se muestra un aviso compacto
+        if (alerta != null && !ui.ajustes.pantallaCompleta && !ui.alertaEsPrueba) {
+            AlertDialog(
+                onDismissRequest = vm::estoyASalvo,
+                containerColor = Color.White,
+                title = { Text(if (ui.alertaManual) "Corte manual ejecutado" else "¡Corte preventivo ejecutado!") },
+                text = { Text("Gas cerrado y energía cortada. Agáchate, cúbrete y sujétate.") },
+                confirmButton = { TextButton(onClick = vm::estoyASalvo) { Text("Estoy a salvo") } },
             )
         }
-    }
-
-    // Si la pantalla completa está desactivada, se muestra un aviso compacto
-    if (alerta != null && !ui.ajustes.pantallaCompleta && !ui.alertaEsPrueba) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = vm::estoyASalvo,
-            containerColor = Color.White,
-            title = { Text("¡Alerta sísmica!") },
-            text = { Text("Magnitud ${"%.1f".format(alerta.magnitud)}. Agáchate, cúbrete y sujétate.") },
-            confirmButton = { androidx.compose.material3.TextButton(onClick = vm::estoyASalvo) { Text("Estoy a salvo") } },
-        )
-    }
     }
 }

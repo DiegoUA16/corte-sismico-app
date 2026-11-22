@@ -26,6 +26,9 @@ object Paleta {
     val Borde = Color(0xFFE3E2DE)
     val Exito = Color(0xFF2E7D32)
     val Alerta = Color(0xFFDC2626)
+    val AlertaSuave = Color(0xFFFDECEC)
+    val Ambar = Color(0xFFD97706)
+    val ExitoSuave = Color(0xFFE8F5E9)
 }
 
 @OptIn(ExperimentalTextApi::class)
