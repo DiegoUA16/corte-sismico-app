@@ -10,3 +10,8 @@
 .cxx/
 build.log
 *.log
+
+# Windows / Java
+Thumbs.db
+*.class
+*.exe
