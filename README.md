@@ -18,7 +18,7 @@ Este repositorio contiene:
 | `arduino/corte_preventivo/` | Sketch del equipo (Arduino Uno + ADXL345 + servo + relé + HC-06) |
 | `arduino/corte_preventivo_telemetria/` | Mismo sketch + envío opcional de aceleración en vivo a la app |
 | `app/` | App Android **Corte Sísmico** (Kotlin + Jetpack Compose) |
-| `apk/CorteSismico-v2.0.apk` | APK lista para instalar |
+| `apk/CorteSismico-v2.1.apk` | APK lista para instalar |
 | `diseno/` | Pantallas diseñadas en Google Stitch |
 
 ---
@@ -98,7 +98,7 @@ llena el indicador de picos y registra los **golpes ignorados**. La lógica de d
 equipo. Corte manual y rearme funcionan igual que con el Arduino.
 
 ### Instalar el APK
-1. Copia `apk/CorteSismico-v2.0.apk` al celular (cable, Drive, WhatsApp…) y ábrelo.
+1. Copia `apk/CorteSismico-v2.1.apk` al celular (cable, Drive, WhatsApp…) y ábrelo.
 2. Si Android lo pide, permite *Instalar apps desconocidas* para esa app.
 3. Acepta los permisos de Bluetooth y notificaciones.
 
@@ -149,5 +149,8 @@ picos/golpes.
   **sigue protegiendo igual** (la decisión de cortar es del Arduino); solo se pierde el aviso en el
   teléfono. Para vigilancia 24/7 en el celular habría que pasar la conexión a un *Foreground Service*.
 - El HC-06 no avisa si el Arduino se reinicia; el estado de la app se confirma con el siguiente `S!` o `N!`.
+  Si al conectar el estado es desconocido, el botón **Rearmar** queda habilitado para sincronizar.
+- En la variante con telemetría el servo se conecta (`attach`) solo mientras se mueve, para que el
+  envío continuo por SoftwareSerial no lo haga temblar.
 - Es un prototipo académico: el umbral de 3.0 m/s² está calibrado para demostración sobre una mesa,
   no para una instalación real de gas o electricidad.

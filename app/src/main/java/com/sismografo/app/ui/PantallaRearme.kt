@@ -195,6 +195,9 @@ private fun BotonMantener(habilitado: Boolean, enviando: Boolean, texto: String,
     val primario = MaterialTheme.colorScheme.primary
     val base = if (habilitado || enviando) primario else Paleta.Borde
 
+    // Si el rearme expira (sin N! en 6 s) la barra vuelve a cero en vez de quedar llena.
+    LaunchedEffect(enviando) { if (!enviando) progreso.snapTo(0f) }
+
     Box(
         Modifier.fillMaxWidth().height(64.dp).clip(CircleShape)
             .background(if (habilitado || enviando) primario.copy(alpha = 0.18f) else Paleta.Recesado)

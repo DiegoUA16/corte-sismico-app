@@ -55,26 +55,38 @@ class ConexionHC06(private val adapter: BluetoothAdapter?) {
     /** Abre el socket. Bloqueante: se ejecuta en Dispatchers.IO. */
     suspend fun conectar(device: BluetoothDevice) = withContext(Dispatchers.IO) {
         cerrar()
-        adapter?.cancelDiscovery()
+        // En Android 12+ cancelDiscovery() exige BLUETOOTH_SCAN, que no pedimos (no escaneamos):
+        // antes lanzaba SecurityException y la conexión fallaba siempre.
+        runCatching { if (adapter?.isDiscovering == true) adapter.cancelDiscovery() }
 
-        val normal = device.createRfcommSocketToServiceRecord(SPP_UUID)
-        socket = try {
-            normal.connect()
-            normal
-        } catch (e: IOException) {
-            runCatching { normal.close() }
-            // Respaldo: algunos HC-06 / teléfonos solo conectan por el canal RFCOMM 1
-            val metodo = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-            val respaldo = metodo.invoke(device, 1) as BluetoothSocket
-            respaldo.connect()
-            respaldo
+        // Cada teléfono / HC-06 acepta una forma distinta de abrir el RFCOMM: se prueban en orden.
+        val intentos: List<() -> BluetoothSocket> = listOf(
+            { device.createRfcommSocketToServiceRecord(SPP_UUID) },
+            { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) },
+            {
+                device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+                    .invoke(device, 1) as BluetoothSocket
+            },
+        )
+        var ultimoError: Exception? = null
+        for (crear in intentos) {
+            val s = try { crear() } catch (e: Exception) { ultimoError = e; continue }
+            try {
+                s.connect()
+                socket = s
+                return@withContext
+            } catch (e: Exception) {
+                ultimoError = e
+                runCatching { s.close() }
+            }
         }
+        throw IOException("No se pudo abrir el canal con ${nombre(device)}", ultimoError)
     }
 
     /** Emite cada línea de texto que manda el Arduino. Termina cuando se cierra la conexión. */
     fun lineas(): Flow<String> = flow {
         val s = socket ?: throw IOException("No hay conexión abierta")
-        val lector = s.inputStream.bufferedReader(Charsets.US_ASCII)
+        val lector = s.inputStream.bufferedReader(Charsets.ISO_8859_1)
         while (true) {
             val linea = lector.readLine() ?: break
             emit(linea)

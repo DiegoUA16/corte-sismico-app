@@ -61,11 +61,13 @@ object Protocolo {
     const val CMD_REARME = "R"
 
     fun interpretar(linea: String): Mensaje? {
-        val t = linea.trim()
+        val t = linea.trim { it.isWhitespace() || it.isISOControl() }
         if (t.isEmpty()) return null
+        // S!/N! se buscan en cualquier parte de la línea y antes que A:/G:, para que un byte
+        // sucio al inicio de la trama del HC-06 nunca impida detectar un corte o un rearme.
         return when {
-            t.startsWith("S!") -> Mensaje.Corte
-            t.startsWith("N!") -> Mensaje.Normal
+            t.contains("S!") -> Mensaje.Corte
+            t.contains("N!") -> Mensaje.Normal
             t.startsWith("A:") -> t.substring(2).trim().toDoubleOrNull()?.let { Mensaje.Aceleracion(it) }
             t.startsWith("G:") -> {
                 val partes = t.substring(2).split(',')

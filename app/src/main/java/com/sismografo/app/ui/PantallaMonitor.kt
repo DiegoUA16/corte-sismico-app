@@ -317,7 +317,8 @@ private fun Acciones(ui: UiState, onCorte: () -> Unit, onRearme: () -> Unit) {
         }
         Button(
             onClick = onRearme,
-            enabled = ui.conectado && corte && pendiente == null,
+            // DESCONOCIDO: el Arduino ya estaba encendido al conectar; rearmar le hace responder N!.
+            enabled = ui.conectado && (corte || ui.sistema == EstadoSistema.DESCONOCIDO) && pendiente == null,
             modifier = Modifier.weight(1f).height(56.dp),
         ) {
             if (pendiente == Protocolo.CMD_REARME) {

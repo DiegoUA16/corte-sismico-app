@@ -50,7 +50,7 @@ void setup() {
   pinMode(pinLedVerde, OUTPUT);
   pinMode(pinLedRojo, OUTPUT);
 
-  servoGas.attach(pinServo);
+  // [TELEMETRÍA] servoGas.attach() se hace solo al mover el servo (corte / rearme)
 
   // Encender y revisar el acelerómetro ADXL345
   if (!accel.begin()) {
@@ -165,12 +165,16 @@ void ejecutarCorteEmergencia() {
   sismoDetectado = true;
   digitalWrite(pinLedVerde, LOW);
   digitalWrite(pinRelay, HIGH);
+  servoGas.attach(pinServo); // [TELEMETRÍA] el servo solo recibe pulsos mientras se mueve
   servoGas.write(90);
 
   delay(80);
   Serial.println("S! ALERTA SISMO! CORTE EJECUTADO");
   delay(40);
   BT.println("S! ALERTA SISMO! CORTE EJECUTADO");
+
+  delay(400);          // [TELEMETRÍA] dejar que llegue a 90° y soltarlo: SoftwareSerial
+  servoGas.detach();   // ya no puede hacerlo temblar
 }
 
 void rearmarSistema() {
@@ -180,11 +184,13 @@ void rearmarSistema() {
   digitalWrite(pinLedRojo, LOW);
   digitalWrite(pinLedVerde, HIGH);
   digitalWrite(pinRelay, LOW);
+  servoGas.attach(pinServo); // [TELEMETRÍA]
   servoGas.write(0);
   noTone(pinBuzzer);
 
   // Esperar un instante a que el servo termine de moverse antes de calibrar
   delay(400);
+  servoGas.detach(); // [TELEMETRÍA] evita que el envío continuo por BT haga temblar el servo
 
   if (sensorActivo == true) {
     sensors_event_t event;
