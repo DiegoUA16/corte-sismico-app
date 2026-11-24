@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.ReportProblem
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Whatshot
@@ -59,7 +60,12 @@ private val verificaciones = listOf(
 
 /** Rearme seguro: lista de verificación + botón de mantener presionado que manda 'R'. */
 @Composable
-fun PantallaRearme(ui: UiState, onCerrar: () -> Unit, onRearmar: () -> Unit) {
+fun PantallaRearme(
+    ui: UiState,
+    onCerrar: () -> Unit,
+    onRearmar: () -> Unit,
+    onDescartarAviso: () -> Unit = {},
+) {
     BackHandler(onBack = onCerrar)
     val marcadas = remember { mutableStateListOf(false, false, false, false) }
     val listo = marcadas.all { it }
@@ -86,22 +92,40 @@ fun PantallaRearme(ui: UiState, onCerrar: () -> Unit, onRearmar: () -> Unit) {
             }
 
             Spacer(Modifier.height(18.dp))
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Paleta.AlertaSuave)
-                    .border(1.dp, Paleta.Alerta.copy(alpha = 0.25f), RoundedCornerShape(20.dp)).padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconoCuadrado(Icons.Rounded.PowerSettingsNew, Paleta.Alerta, 44.dp)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        if (ui.sistemaDesde > 0) "Corte activo desde las ${hora(ui.sistemaDesde)}" else "Corte activo",
-                        style = MaterialTheme.typography.titleSmall, color = Color(0xFF7F1D1D),
-                    )
-                    Text(
-                        "Gas cerrado · Energía cortada" + if (ui.sistemaDesde > 0) " · ${duracionLarga(ahora - ui.sistemaDesde)}" else "",
-                        style = MaterialTheme.typography.bodySmall, color = Color(0xFF991B1B),
-                    )
+            if (ui.sistema == EstadoSistema.CORTE) {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Paleta.AlertaSuave)
+                        .border(1.dp, Paleta.Alerta.copy(alpha = 0.25f), RoundedCornerShape(20.dp)).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconoCuadrado(Icons.Rounded.PowerSettingsNew, Paleta.Alerta, 44.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            if (ui.sistemaDesde > 0) "Corte activo desde las ${hora(ui.sistemaDesde)}" else "Corte activo",
+                            style = MaterialTheme.typography.titleSmall, color = Color(0xFF7F1D1D),
+                        )
+                        Text(
+                            "Gas cerrado · Energía cortada" + if (ui.sistemaDesde > 0) " · ${duracionLarga(ahora - ui.sistemaDesde)}" else "",
+                            style = MaterialTheme.typography.bodySmall, color = Color(0xFF991B1B),
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Paleta.Recesado)
+                        .border(1.dp, Paleta.Borde, RoundedCornerShape(20.dp)).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconoCuadrado(Icons.Rounded.Refresh, MaterialTheme.colorScheme.primary, 44.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Estado del equipo sin confirmar", style = MaterialTheme.typography.titleSmall, color = Paleta.Tinta)
+                        Text(
+                            "Al rearmar se abrirá el gas, se restablecerá la energía y se recalibrará el sensor.",
+                            style = MaterialTheme.typography.bodySmall, color = Paleta.TintaSuave,
+                        )
+                    }
                 }
             }
 
@@ -131,6 +155,22 @@ fun PantallaRearme(ui: UiState, onCerrar: () -> Unit, onRearmar: () -> Unit) {
                         "La app envía «R». El Arduino desactiva el relé, regresa el servo a 0° (válvula abierta), " +
                             "apaga la sirena y recalibra el ADXL345 en reposo. No muevas el sensor durante la calibración.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+
+            ui.aviso?.let { aviso ->
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xFFFFF4E5)).padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.ReportProblem, null, tint = Paleta.Ambar)
+                    Spacer(Modifier.width(10.dp))
+                    Text(aviso, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = Color(0xFF7C4A03))
+                    Icon(
+                        Icons.Rounded.Close, "Cerrar", tint = Color(0xFF7C4A03),
+                        modifier = Modifier.clip(CircleShape).clickable(onClick = onDescartarAviso).padding(4.dp),
                     )
                 }
             }

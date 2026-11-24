@@ -46,6 +46,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -117,7 +118,7 @@ fun PantallaMonitor(
 
         if (ui.modoDemo) item { TarjetaDemo(onSimularGolpe, onSimularSismo) }
 
-        item { TarjetaAceleracion(ui) }
+        if (ui.telemetria && ui.conectado) item { TarjetaAceleracion(ui) }
         item { TarjetaFiltro(ui) }
         item { ActividadReciente(ui, onIrAEventos) }
     }
@@ -168,7 +169,7 @@ private fun TarjetaEstado(ui: UiState, onIrASistema: () -> Unit) {
         sistema == EstadoSistema.CORTE -> "Corte activo" to "Gas cerrado y energía cortada"
         sistema == EstadoSistema.NORMAL && ui.conectado -> "Sistema vigilando" to "Sin vibraciones peligrosas"
         sistema == EstadoSistema.NORMAL -> "Último estado: normal" to "Conéctate para vigilar en vivo"
-        ui.conectado -> "Esperando al equipo" to "Pulsa reset en el Arduino o rearma para recibir el estado"
+        ui.conectado -> "Esperando al equipo" to "Pulsa Rearmar para sincronizar el estado"
         else -> "Sin datos del equipo" to "Conecta el HC-06 para empezar"
     }
     val pie = when {
@@ -256,7 +257,7 @@ private fun EscudoAnimado(sistema: EstadoSistema, color: Color, vivo: Boolean) {
 private fun Actuadores(sistema: EstadoSistema, confirmado: Boolean) {
     val corte = sistema == EstadoSistema.CORTE
     val desconocido = sistema == EstadoSistema.DESCONOCIDO
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(Modifier.alpha(if (confirmado || desconocido) 1f else 0.72f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Actuador(
             Icons.Rounded.Whatshot, "Gas",
             when { desconocido -> "—"; corte -> "Cerrada"; else -> "Abierta" },

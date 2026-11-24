@@ -10,8 +10,10 @@ data class Ajustes(
     val sonido: Boolean = true,
     val pantallaCompleta: Boolean = true,
     val reconectar: Boolean = true,
-    /** Guarda en el registro los golpes que el filtro ignoró (solo con telemetría). */
+    /** Guarda en el registro los golpes que el filtro ignoró. */
     val registrarGolpes: Boolean = true,
+    /** Perfil de sirena del buzzer del Arduino (1..4). */
+    val perfilAlarma: Int = 1,
 )
 
 /** Guarda ajustes, registro de eventos, último estado y último HC-06 en SharedPreferences. */
@@ -26,6 +28,7 @@ class Almacen(context: Context) {
         pantallaCompleta = prefs.getBoolean("pantalla_completa", true),
         reconectar = prefs.getBoolean("reconectar", true),
         registrarGolpes = prefs.getBoolean("registrar_golpes", true),
+        perfilAlarma = prefs.getInt("perfil_alarma", 1).coerceIn(1, 4),
     )
 
     fun guardarAjustes(a: Ajustes) {
@@ -36,6 +39,7 @@ class Almacen(context: Context) {
             .putBoolean("pantalla_completa", a.pantallaCompleta)
             .putBoolean("reconectar", a.reconectar)
             .putBoolean("registrar_golpes", a.registrarGolpes)
+            .putInt("perfil_alarma", a.perfilAlarma.coerceIn(1, 4))
             .apply()
     }
 

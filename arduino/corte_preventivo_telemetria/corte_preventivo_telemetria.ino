@@ -34,6 +34,27 @@ bool sensorActivo = false;
 unsigned long tiempoUltimoPico = 0;
 int contadorPicos = 0;
 unsigned long ultimoEnvio = 0; // [TELEMETRÍA]
+unsigned long ultimoCambioSirena = 0;
+uint8_t faseSirena = 0;
+
+void moverServo(int angulo) {
+  servoGas.attach(pinServo);
+  servoGas.write(angulo);
+  delay(400);
+  servoGas.detach();
+}
+
+void reportarEstado() {
+  if (sismoDetectado) {
+    Serial.println("S! ALERTA SISMO! CORTE EJECUTADO");
+    delay(40);
+    BT.println("S! ALERTA SISMO! CORTE EJECUTADO");
+  } else {
+    Serial.println("N! SISTEMA CALIBRADO Y NORMAL");
+    delay(40);
+    BT.println("N! SISTEMA CALIBRADO Y NORMAL");
+  }
+}
 
 void setup() {
   Serial.begin(9600); // Comunicación con el computador (USB)
@@ -67,41 +88,61 @@ void setup() {
 }
 
 void loop() {
-  // 1. Revisar si llegó una letra ('C' o 'R') desde el celular por Bluetooth
-  if (BT.available() > 0) {
+  // 1. Vaciar todos los comandos recibidos desde el celular por Bluetooth ('C', 'R' o '?')
+  while (BT.available() > 0) {
     char dato = BT.read();
     if (dato >= 32 && dato <= 126) {
       procesarComando(dato);
     }
   }
 
-  // 2. Revisar si llegó una letra desde el Monitor Serie del PC
-  if (Serial.available() > 0) {
+  // 2. Vaciar todos los comandos desde el Monitor Serie del PC
+  while (Serial.available() > 0) {
     char dato = Serial.read();
     if (dato >= 32 && dato <= 126) {
       procesarComando(dato);
     }
   }
 
-  // 3. Revisar si alguien presionó el botón físico de reinicio
+  // 3. Revisar si alguien presionó el botón físico de reinicio (con antirrebote)
   if (digitalRead(pinBoton) == LOW) {
-    delay(200);
-    rearmarSistema();
+    delay(50);
+    if (digitalRead(pinBoton) == LOW) {
+      unsigned long inicioEspera = millis();
+      while (digitalRead(pinBoton) == LOW && millis() - inicioEspera < 1500) {
+        delay(10);
+      }
+      rearmarSistema();
+    }
   }
 
-  // 4. Si no hay sismo, vigilar vibraciones; si hay sismo, sonar sirena
+  // 4. Si no hay sismo, vigilar vibraciones; si hay sismo, sirena NO bloqueante
   if (sismoDetectado == false) {
     if (sensorActivo == true) {
       vigilarSismo();
     }
     delay(50);
   } else {
-    digitalWrite(pinLedRojo, HIGH);
-    tone(pinBuzzer, 2000);
-    delay(250);
-    digitalWrite(pinLedRojo, LOW);
-    tone(pinBuzzer, 1200);
-    delay(250);
+    // Sirena no bloqueante con ventana silenciosa (noTone) para que SoftwareSerial
+    // reciba 'R' sin interferencia de Timer2 y el botón físico responda al instante.
+    unsigned long ahora = millis();
+    unsigned long duracion = (faseSirena == 2) ? 180UL : 200UL;
+    if (ahora - ultimoCambioSirena >= duracion) {
+      ultimoCambioSirena = ahora;
+      if (faseSirena == 0) {
+        digitalWrite(pinLedRojo, HIGH);
+        tone(pinBuzzer, 2000);
+        faseSirena = 1;
+      } else if (faseSirena == 1) {
+        digitalWrite(pinLedRojo, LOW);
+        tone(pinBuzzer, 1200);
+        faseSirena = 2;
+      } else {
+        digitalWrite(pinLedRojo, LOW);
+        noTone(pinBuzzer);
+        faseSirena = 0;
+      }
+    }
   }
 }
 
@@ -110,9 +151,10 @@ void loop() {
 void procesarComando(char comando) {
   if (comando == 'R' || comando == 'r') {
     rearmarSistema();
-  }
-  if (comando == 'C' || comando == 'c') {
+  } else if (comando == 'C' || comando == 'c') {
     ejecutarCorteEmergencia();
+  } else if (comando == '?') {
+    reportarEstado();
   }
 }
 
@@ -148,14 +190,15 @@ void vigilarSismo() {
     if (contadorPicos >= 4) {
       ejecutarCorteEmergencia();
     } else {
-      tone(pinBuzzer, 1000, 100);
-      Serial.print("Golpe ignorado. Mag: ");
-      Serial.println(magnitud);
-      // [TELEMETRÍA] Avisar a la app del pico (la app registra el golpe ignorado)
+      // Enviar G: por Bluetooth ANTES de tone() para evitar interferencia de Timer2 con SoftwareSerial
       BT.print("G:");
       BT.print(magnitud, 2);
       BT.print(",");
       BT.println(contadorPicos);
+      delay(10);
+      tone(pinBuzzer, 1000, 100);
+      Serial.print("Golpe ignorado. Mag: ");
+      Serial.println(magnitud);
     }
     delay(200);
   }
@@ -163,44 +206,41 @@ void vigilarSismo() {
 
 void ejecutarCorteEmergencia() {
   sismoDetectado = true;
+  faseSirena = 0;
+  ultimoCambioSirena = millis();
   digitalWrite(pinLedVerde, LOW);
   digitalWrite(pinRelay, HIGH);
-  servoGas.attach(pinServo); // [TELEMETRÍA] el servo solo recibe pulsos mientras se mueve
-  servoGas.write(90);
-
-  delay(80);
-  Serial.println("S! ALERTA SISMO! CORTE EJECUTADO");
-  delay(40);
-  BT.println("S! ALERTA SISMO! CORTE EJECUTADO");
-
-  delay(400);          // [TELEMETRÍA] dejar que llegue a 90° y soltarlo: SoftwareSerial
-  servoGas.detach();   // ya no puede hacerlo temblar
+  delay(100); // Escalonar pico de corriente entre relé y servo
+  reportarEstado();
+  moverServo(90);
 }
 
 void rearmarSistema() {
   sismoDetectado = false;
   contadorPicos = 0;
+  faseSirena = 0;
 
+  noTone(pinBuzzer);
   digitalWrite(pinLedRojo, LOW);
   digitalWrite(pinLedVerde, HIGH);
   digitalWrite(pinRelay, LOW);
-  servoGas.attach(pinServo); // [TELEMETRÍA]
-  servoGas.write(0);
-  noTone(pinBuzzer);
-
-  // Esperar un instante a que el servo termine de moverse antes de calibrar
-  delay(400);
-  servoGas.detach(); // [TELEMETRÍA] evita que el envío continuo por BT haga temblar el servo
+  moverServo(0);
 
   if (sensorActivo == true) {
-    sensors_event_t event;
-    accel.getEvent(&event);
-    baseX = event.acceleration.x;
-    baseY = event.acceleration.y;
-    baseZ = event.acceleration.z;
+    float sx = 0.0, sy = 0.0, sz = 0.0;
+    const int muestras = 20;
+    for (int i = 0; i < muestras; i++) {
+      sensors_event_t event;
+      accel.getEvent(&event);
+      sx += event.acceleration.x;
+      sy += event.acceleration.y;
+      sz += event.acceleration.z;
+      delay(5);
+    }
+    baseX = sx / muestras;
+    baseY = sy / muestras;
+    baseZ = sz / muestras;
   }
 
-  Serial.println("N! SISTEMA CALIBRADO Y NORMAL");
-  delay(40);
-  BT.println("N! SISTEMA CALIBRADO Y NORMAL");
+  reportarEstado();
 }

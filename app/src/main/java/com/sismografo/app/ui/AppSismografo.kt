@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.sismografo.app.SismografoViewModel
 import com.sismografo.app.bluetooth.Emparejado
+import com.sismografo.app.datos.EstadoSistema
 import com.sismografo.app.ui.tema.Paleta
 
 private enum class Pestana(val etiqueta: String, val icono: ImageVector) {
@@ -91,7 +92,7 @@ fun AppSismografo(vm: SismografoViewModel) {
     // En cuanto haya permiso, intenta reconectar al último HC-06 usado.
     LaunchedEffect(permisoBt) { if (permisoBt) vm.autoconectar() }
 
-    val btEncendido = remember(refresco, ui.estado) { vm.bluetoothEncendido }
+    val btEncendido = ui.btEncendido
     val emparejados: List<Emparejado> = remember(refresco, permisoBt, btEncendido) {
         if (permisoBt && btEncendido) vm.emparejados() else emptyList()
     }
@@ -155,8 +156,14 @@ fun AppSismografo(vm: SismografoViewModel) {
                         onAbrirAjustesBt = { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
                     )
                     Pestana.AJUSTES -> PantallaAjustes(
-                        ui.ajustes, ui.modoDemo, padding,
+                        ajustes = ui.ajustes,
+                        modoDemo = ui.modoDemo,
+                        conectadoEquipo = ui.conectado && !ui.modoDemo,
+                        enCorte = ui.sistema == EstadoSistema.CORTE,
+                        contentPadding = padding,
                         onCambio = vm::actualizarAjustes,
+                        onElegirAlarma = vm::cambiarPerfilAlarma,
+                        onProbarAlarmaEquipo = vm::probarAlarmaEquipo,
                         onProbarAlerta = vm::probarAlerta,
                         onIniciarDemo = { vm.iniciarDemo(); pestana = Pestana.MONITOR },
                         onSalirDemo = vm::desconectar,
@@ -171,7 +178,12 @@ fun AppSismografo(vm: SismografoViewModel) {
             enter = slideInVertically { it / 3 } + fadeIn(),
             exit = slideOutVertically { it / 3 } + fadeOut(),
         ) {
-            PantallaRearme(ui, onCerrar = { rearmeAbierto = false }, onRearmar = vm::rearmar)
+            PantallaRearme(
+                ui = ui,
+                onCerrar = { rearmeAbierto = false },
+                onRearmar = vm::rearmar,
+                onDescartarAviso = vm::descartarAviso,
+            )
         }
 
         // Alerta a pantalla completa por encima de todo

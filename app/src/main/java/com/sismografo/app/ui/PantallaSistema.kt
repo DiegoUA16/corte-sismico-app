@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.sismografo.app.UiState
 import com.sismografo.app.bluetooth.Emparejado
 import com.sismografo.app.bluetooth.EstadoConexion
+import com.sismografo.app.datos.EstadoSistema
 import com.sismografo.app.datos.Parametros
 import com.sismografo.app.datos.enG
 import com.sismografo.app.datos.f1
@@ -115,9 +117,10 @@ fun PantallaSistema(
                     }
                 }
                 items(emparejados, key = { it.direccion }) { e ->
+                    val esActual = !ui.modoDemo && ui.dispositivo?.direccion == e.direccion && ui.estado !is EstadoConexion.Desconectado
                     FilaEmparejado(
-                        e,
-                        activo = !ui.modoDemo && ui.dispositivo?.direccion == e.direccion && ui.estado !is EstadoConexion.Desconectado,
+                        e = e,
+                        estadoActual = if (esActual) ui.estado else null,
                         onConectar = { onConectar(e.device) },
                     )
                 }
@@ -225,7 +228,16 @@ private fun TarjetaConexion(ui: UiState, onDesconectar: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     MiniDato(Icons.Rounded.Timer, "Tiempo", ui.conectadoDesde?.let { duracionLarga(ahora - it) } ?: "--", Modifier.weight(1f))
-                    MiniDato(Icons.Rounded.ShowChart, "Telemetría", if (ui.telemetria) "Activa" else "No enviada", Modifier.weight(1f))
+                    MiniDato(
+                        Icons.Rounded.VerifiedUser,
+                        "Estado",
+                        when (ui.sistema) {
+                            EstadoSistema.NORMAL -> "Normal"
+                            EstadoSistema.CORTE -> "Corte activo"
+                            EstadoSistema.DESCONOCIDO -> "Sin confirmar"
+                        },
+                        Modifier.weight(1f),
+                    )
                 }
             }
             if (estado !is EstadoConexion.Desconectado) {
@@ -386,18 +398,24 @@ private fun Diagnostico(ui: UiState) {
 }
 
 @Composable
-private fun FilaEmparejado(e: Emparejado, activo: Boolean, onConectar: () -> Unit) {
+private fun FilaEmparejado(e: Emparejado, estadoActual: EstadoConexion?, onConectar: () -> Unit) {
     val compatible = !e.esAudio
+    val conectado = estadoActual is EstadoConexion.Conectado
+    val enProceso = estadoActual != null && !conectado
     Tarjeta(padding = 14.dp, modifier = Modifier.alpha(if (compatible) 1f else 0.55f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))
-                    .background(if (activo) MaterialTheme.colorScheme.primaryContainer else Paleta.Recesado),
+                    .background(if (conectado) MaterialTheme.colorScheme.primaryContainer else Paleta.Recesado),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     if (e.esAudio) Icons.Rounded.Headset else Icons.Rounded.Bluetooth, null,
-                    tint = if (activo) MaterialTheme.colorScheme.primary else Paleta.TintaSuave,
+                    tint = when {
+                        conectado -> MaterialTheme.colorScheme.primary
+                        enProceso -> Paleta.Ambar
+                        else -> Paleta.TintaSuave
+                    },
                 )
             }
             Spacer(Modifier.width(14.dp))
@@ -405,15 +423,23 @@ private fun FilaEmparejado(e: Emparejado, activo: Boolean, onConectar: () -> Uni
                 Text(e.nombre, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 Text(e.direccion, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = Paleta.TintaSuave)
                 when {
-                    activo -> Text("Equipo actual", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    conectado -> Text("Conectado actualmente", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    enProceso -> Text(
+                        if (estadoActual is EstadoConexion.Conectando) "Conectando…" else "Reintentando…",
+                        style = MaterialTheme.typography.labelMedium, color = Paleta.Ambar,
+                    )
                     !compatible -> Text("Es un dispositivo de audio", style = MaterialTheme.typography.labelMedium, color = Paleta.Alerta)
                 }
             }
             when {
-                activo -> Box(
+                conectado -> Box(
                     Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Rounded.Check, "Conectado", tint = Color.White) }
+                enProceso -> Pildora(
+                    if (estadoActual is EstadoConexion.Conectando) "Enlazando" else "Reintentando",
+                    Paleta.Ambar, punto = false,
+                )
                 compatible -> Text(
                     "Conectar",
                     Modifier.clip(CircleShape).background(Paleta.Recesado).clickable(onClick = onConectar)

@@ -12,8 +12,8 @@ android {
         applicationId = "com.sismografo.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "2.1"
+        versionCode = 4
+        versionName = "2.2"
     }
 
     buildTypes {
@@ -33,6 +33,10 @@ android {
         compose = true
         buildConfig = true
     }
+}
+
+base {
+    archivesName.set("CorteSismico-v${android.defaultConfig.versionName}")
 }
 
 dependencies {

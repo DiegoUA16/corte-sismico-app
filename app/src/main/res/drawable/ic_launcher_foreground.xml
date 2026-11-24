@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Sombra suave del escudo -->
+    <path
+        android:fillColor="#26001E26"
+        android:pathData="M54,30.2 L74.2,37.5 C74.7,37.7 75,38.2 75,38.8 L75,55.2 C75,67 65.8,76.8 54,82.2 C42.2,76.8 33,67 33,55.2 L33,38.8 C33,38.2 33.3,37.7 33.8,37.5 Z" />
+    <!-- Escudo protector blanco (con margen cómodo en zona segura) -->
+    <path
+        android:fillColor="#FAF9F6"
+        android:pathData="M54,28 L74.2,35.3 C74.7,35.5 75,36 75,36.6 L75,53 C75,64.8 65.8,74.6 54,80 C42.2,74.6 33,64.8 33,53 L33,36.6 C33,36 33.3,35.5 33.8,35.3 Z" />
+    <!-- Pulso sísmico (rojo alerta de la app) -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M38.5,54 L44.5,54 L47.5,46.5 L51.8,63 L56.5,42.5 L60.5,58 L63.5,54 L69.5,54"
+        android:strokeWidth="3.8"
+        android:strokeColor="#DC2626"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

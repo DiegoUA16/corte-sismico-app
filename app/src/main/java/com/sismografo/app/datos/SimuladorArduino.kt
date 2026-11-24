@@ -27,10 +27,13 @@ class SimuladorArduino {
     fun simularGolpe() { golpe = 1 }
     fun simularSismo() { sismo = 14 } // ~2.8 s de oscilación sostenida
 
-    /** Comandos que la app manda por Bluetooth: 'C' y 'R'. */
+    /** Comandos que la app manda por Bluetooth: 'C', 'R' y '?'. */
     fun recibir(cmd: String): List<String> = when (cmd.trim().uppercase()) {
         Protocolo.CMD_CORTE -> cortar()
         Protocolo.CMD_REARME -> rearmar()
+        Protocolo.CMD_ESTADO -> listOf(
+            if (enCorte) "S! ALERTA SISMO! CORTE EJECUTADO" else "N! SISTEMA CALIBRADO Y NORMAL"
+        )
         else -> emptyList()
     }
 
@@ -42,11 +45,11 @@ class SimuladorArduino {
         var dz = Random.nextDouble(-0.25, 0.25) + 0.12 * sin(t * 1.7)
         if (golpe > 0) {
             golpe--
-            dx += 3.4; dz += 2.1
+            dx += 2.0; dz += 1.2
         }
         if (sismo > 0) {
             sismo--
-            val a = 4.0 + Random.nextDouble(0.0, 2.2)
+            val a = 2.2 + Random.nextDouble(0.0, 1.4)
             dx += a * sin(t * 9.0); dy += a * 0.6
         }
         val magnitud = sqrt(dx * dx + dy * dy + dz * dz)

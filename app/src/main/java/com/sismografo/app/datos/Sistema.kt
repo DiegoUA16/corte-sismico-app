@@ -9,12 +9,20 @@ import java.util.Locale
  * cámbialos aquí para que la app muestre lo mismo.
  */
 object Parametros {
-    const val UMBRAL_MS2 = 3.0          // umbralRiesgo
+    const val UMBRAL_MS2 = 1.6          // umbralSismo (≈ 0.16g - Mercalli VI)
     const val PICOS_NECESARIOS = 4      // contadorPicos >= 4
     const val VENTANA_MS = 1500L        // tiempo máximo entre picos
-    const val RANGO_G = 8               // ADXL345_RANGE_8_G
-    const val ESCALA_MS2 = 8.0          // escala visual de la barra de aceleración
+    const val RANGO_G = 2               // ADXL345_RANGE_2_G
+    const val ESCALA_MS2 = 4.0          // escala visual de la barra de aceleración
     const val GRAVEDAD = 9.80665
+}
+
+/** Perfiles de sirena configurables en vivo en el Arduino (comandos '1'..'4'). */
+enum class PerfilAlarma(val codigo: Int, val nombre: String, val detalle: String) {
+    BITONO(1, "Bitono clásico", "Sirena alterna de dos tonos"),
+    BARRIDO(2, "Barrido electrónico", "Tono ascendente continuo"),
+    PULSO(3, "Pulso industrial", "3 pitidos agudos intermitentes"),
+    DOBLE_RAPIDO(4, "Doble tono rápido", "Alerta sísmica rápida"),
 }
 
 /** Estado físico de la instalación según el último mensaje del Arduino. */
@@ -59,6 +67,8 @@ sealed interface Mensaje {
 object Protocolo {
     const val CMD_CORTE = "C"
     const val CMD_REARME = "R"
+    const val CMD_ESTADO = "?"
+    const val CMD_PROBAR_ALARMA = "T"
 
     fun interpretar(linea: String): Mensaje? {
         val t = linea.trim { it.isWhitespace() || it.isISOControl() }
@@ -68,12 +78,13 @@ object Protocolo {
         return when {
             t.contains("S!") -> Mensaje.Corte
             t.contains("N!") -> Mensaje.Normal
-            t.startsWith("A:") -> t.substring(2).trim().toDoubleOrNull()?.let { Mensaje.Aceleracion(it) }
-            t.startsWith("G:") -> {
-                val partes = t.substring(2).split(',')
+            t.contains("G:") -> {
+                val partes = t.substringAfter("G:").split(',')
                 val m = partes.getOrNull(0)?.trim()?.toDoubleOrNull() ?: return Mensaje.Otro(t)
-                Mensaje.Pico(m, partes.getOrNull(1)?.trim()?.toIntOrNull() ?: 1)
+                val c = partes.getOrNull(1)?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 1
+                Mensaje.Pico(m, c)
             }
+            t.startsWith("A:") -> t.substring(2).trim().replace(',', '.').toDoubleOrNull()?.let { Mensaje.Aceleracion(it) }
             else -> Mensaje.Otro(t)
         }
     }
